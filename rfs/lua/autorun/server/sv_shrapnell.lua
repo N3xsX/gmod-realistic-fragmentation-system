@@ -34,8 +34,28 @@ net.Receive("RFSUpdateWhitelist", function(len, ply)
 end)
 
 local function shootTraces(num, pos)
+    local directionEnabled = GetConVar("sv_rfs_fragment_direction"):GetBool()
+    local downTraceData = {
+        start = pos,
+        endpos = pos + Vector(0, 0, -10000)
+    }
+    local traceResult = util.TraceLine(downTraceData)
+    local isCloseToGround = traceResult.Hit and pos:Distance(traceResult.HitPos) < 10
     for i = 1, num do
-        local direction = VectorRand():GetNormalized()
+        local direction
+        if isCloseToGround then 
+            if directionEnabled then
+                direction = Vector(math.Rand(-1, 1), math.Rand(-1, 1), math.Rand(-0.05, 0.2)):GetNormalized()
+            else
+                direction = Vector(math.Rand(-1, 1), math.Rand(-1, 1), math.Rand(-0.1, 1)):GetNormalized()
+            end
+        else
+            if directionEnabled then
+                direction = Vector(math.Rand(-1, 1), math.Rand(-1, 1), math.Rand(-0.2, 0.2)):GetNormalized()
+            else
+                direction = VectorRand():GetNormalized()
+            end
+        end
         local distance = math.random(GetConVar("sv_rfs_fragments_travel_distance"):GetInt() / 2, GetConVar("sv_rfs_fragments_travel_distance"):GetInt()) / 0.02
         local traceData = {
             start = pos,
@@ -91,6 +111,13 @@ local function shootBullets(num, pos)
     local effectData = EffectData()
     effectData:SetOrigin(pos)
     local batchFragmentsEnabled = GetConVar("sv_rfs_batch_fragments"):GetBool()
+    local directionEnabled = GetConVar("sv_rfs_fragment_direction"):GetBool()
+    local downTraceData = {
+        start = pos,
+        endpos = pos + Vector(0, 0, -10000)
+    }
+    local traceResult = util.TraceLine(downTraceData)
+    local isCloseToGround = traceResult.Hit and pos:Distance(traceResult.HitPos) < 10
 
     if batchFragmentsEnabled then -- i dunno if this even improves something
         local fragmentsPerBatch = math.floor(num / 5)
@@ -98,9 +125,23 @@ local function shootBullets(num, pos)
             timer.Simple(batch * 0.05, function()
                 for i = 1, fragmentsPerBatch do
                     local fragment = {}
+                    local direction
+                    if isCloseToGround then 
+                        if directionEnabled then
+                            direction = Vector(math.Rand(-1, 1), math.Rand(-1, 1), math.Rand(-0.05, 0.2)):GetNormalized()
+                        else
+                            direction = Vector(math.Rand(-1, 1), math.Rand(-1, 1), math.Rand(-0.1, 1)):GetNormalized()
+                        end
+                    else
+                        if directionEnabled then
+                            direction = Vector(math.Rand(-1, 1), math.Rand(-1, 1), math.Rand(-0.2, 0.2)):GetNormalized()
+                        else
+                            direction = VectorRand():GetNormalized()
+                        end
+                    end
                     fragment.Num = 1
                     fragment.Src = name:GetPos() + Vector(0, 0, 5)
-                    fragment.Dir = VectorRand():GetNormalized()
+                    fragment.Dir = direction
                     fragment.Distance = math.random(GetConVar("sv_rfs_fragments_travel_distance"):GetInt() / 2, GetConVar("sv_rfs_fragments_travel_distance"):GetInt()) / 0.02
                     fragment.Spread = Vector(0.01, 0.01, 0)
                     fragment.Tracer = 0
@@ -134,9 +175,9 @@ local function shootBullets(num, pos)
                                         ricochetFragment.Distance = fragment.Distance / 2
                                         ricochetFragment.Spread = fragment.Spread
                                         ricochetFragment.Tracer = fragment.Tracer
-                                        ricochetFragment.Force = fragment.Force
+                                        ricochetFragment.Force = fragment.Force / 2
                                         ricochetFragment.AmmoType = fragment.AmmoType
-                                        ricochetFragment.Damage = fragment.Damage
+                                        ricochetFragment.Damage = fragment.Damage / 2
                 
                                         name:FireBullets(ricochetFragment)
                 
@@ -153,9 +194,23 @@ local function shootBullets(num, pos)
     else
         for i = 1, num do
             local fragment = {}
+            local direction
+            if isCloseToGround then 
+                if directionEnabled then
+                    direction = Vector(math.Rand(-1, 1), math.Rand(-1, 1), math.Rand(-0.05, 0.2)):GetNormalized()
+                else
+                    direction = Vector(math.Rand(-1, 1), math.Rand(-1, 1), math.Rand(-0.1, 1)):GetNormalized()
+                end
+            else
+                if directionEnabled then
+                    direction = Vector(math.Rand(-1, 1), math.Rand(-1, 1), math.Rand(-0.2, 0.2)):GetNormalized()
+                else
+                    direction = VectorRand():GetNormalized()
+                end
+            end
             fragment.Num = 1
             fragment.Src = name:GetPos() + Vector(0, 0, 5)
-            fragment.Dir = VectorRand():GetNormalized()
+            fragment.Dir = direction
             fragment.Distance = math.random(GetConVar("sv_rfs_fragments_travel_distance"):GetInt() / 2, GetConVar("sv_rfs_fragments_travel_distance"):GetInt()) / 0.02
             fragment.Spread = Vector(0.01, 0.01, 0)
             fragment.Tracer = GetConVar("sv_rfs_enable_bullet_traces"):GetInt()
@@ -189,9 +244,9 @@ local function shootBullets(num, pos)
                                 ricochetFragment.Distance = fragment.Distance / 2
                                 ricochetFragment.Spread = fragment.Spread
                                 ricochetFragment.Tracer = fragment.Tracer
-                                ricochetFragment.Force = fragment.Force
+                                ricochetFragment.Force = fragment.Force / 2
                                 ricochetFragment.AmmoType = fragment.AmmoType
-                                ricochetFragment.Damage = fragment.Damage
+                                ricochetFragment.Damage = fragment.Damage / 2
         
                                 name:FireBullets(ricochetFragment)
         

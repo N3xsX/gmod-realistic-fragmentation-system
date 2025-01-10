@@ -19,6 +19,7 @@ if SERVER then
     CreateConVar("sv_rfs_ricochet_chance", '25', {FCVAR_ARCHIVE} , "", 1, 100 )
     CreateConVar("sv_rfs_fragments_travel_distance", '100', {FCVAR_ARCHIVE} , "", 10, 1000 )
     CreateConVar("sv_rfs_debug", '0', {FCVAR_ARCHIVE} , "", 0, 1 )
+    CreateConVar("sv_rfs_fragment_direction", "1", {FCVAR_ARCHIVE}, "", 0, 1)
 end
 
 CreateConVar("sv_rfs_enable_ricochet", '1', {FCVAR_ARCHIVE, FCVAR_REPLICATED} , "", 0, 1 )
@@ -50,6 +51,8 @@ hook.Add("PopulateToolMenu", "RFSOptions", function()
             panel:Help("Traces: The least resource-intensive option. Fragments don’t physically interact with the world (e.g., they won’t push props or leave bullet holes). In short, no visual effects but gets the job done")
             panel:Help("Bullets: The most resource-heavy method. Fragments behave like normal bullets, interacting with the world in all possible ways")
             panel:Help("Bullets w/ traces: A middle ground. Combines traces and bullets based on the set ratio. This option allows some of the physical interaction effects, while maintaining a better performance balance than pure bullets")
+            panel:CheckBox("Enable Side-Biased fragments", "sv_rfs_fragment_direction")
+            panel:ControlHelp("If enabled, fragments will spread more horizontally, reducing vertical spread")
             panel:CheckBox("Enable bullets batching ", "sv_rfs_batch_fragments")
             panel:ControlHelp("If enabled, bullets will spawn in smaller batches instead of all at once. May reduce lag spikes during explosion")
             panel:CheckBox("Enable bullets traces ", "sv_rfs_enable_bullet_traces")
