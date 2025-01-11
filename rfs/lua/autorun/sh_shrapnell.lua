@@ -15,15 +15,15 @@ if SERVER then
     CreateConVar("sv_rfs_trtobl_ratio", '50', {FCVAR_ARCHIVE} , "", 1, 99 )
     CreateConVar("sv_rfs_fragments_type", '2', {FCVAR_ARCHIVE} , "", 0, 2 )
     CreateConVar("sv_rfs_enable_bullet_traces", '1', {FCVAR_ARCHIVE} , "", 0, 1 )
-    CreateConVar("sv_rfs_ricochet_angle", '60', {FCVAR_ARCHIVE} , "", 0, 90 )
-    CreateConVar("sv_rfs_ricochet_chance", '25', {FCVAR_ARCHIVE} , "", 1, 100 )
+    CreateConVar("sv_rfs_ricochet_angle", '50', {FCVAR_ARCHIVE} , "", 0, 90 )
+    CreateConVar("sv_rfs_ricochet_chance", '50', {FCVAR_ARCHIVE} , "", 1, 100 )
     CreateConVar("sv_rfs_fragments_travel_distance", '100', {FCVAR_ARCHIVE} , "", 10, 1000 )
     CreateConVar("sv_rfs_debug", '0', {FCVAR_ARCHIVE} , "", 0, 1 )
     CreateConVar("sv_rfs_fragment_direction", "1", {FCVAR_ARCHIVE}, "", 0, 1)
 end
 
 CreateConVar("sv_rfs_enable_ricochet", '1', {FCVAR_ARCHIVE, FCVAR_REPLICATED} , "", 0, 1 )
-CreateConVar("sv_rfs_fragments", '250', {FCVAR_ARCHIVE, FCVAR_REPLICATED} , "", 1, 1500 )
+CreateConVar("sv_rfs_fragments", '250', {FCVAR_ARCHIVE, FCVAR_REPLICATED} , "", 1, 3000 )
 
 -- for dwr
 hook.Add( "Initialize", "grenadeFragments", function()
@@ -71,7 +71,7 @@ hook.Add("PopulateToolMenu", "RFSOptions", function()
             end
             panel:NumSlider("Fragment travel distance (m) ", "sv_rfs_fragments_travel_distance", 10, 1000, 0)
             panel:ControlHelp("Sets the maximum fragment travel distance in meters. If the distance between the explosion and the player or NPC exceeds this value, the fragments will not spawn to save performance")
-            panel:NumSlider("Fragment Count ", "sv_rfs_fragments", 1, 1500, 0)
+            panel:NumSlider("Fragment Count ", "sv_rfs_fragments", 1, 3000, 0)
             panel:ControlHelp("Selecting a number higher than 500 may cause lag spikes and is not recommended.")
             panel:NumSlider("Fragment Damage ", "sv_rfs_damage", 1, 100, 0)
             panel:NumSlider("Bullets to traces ratio (%) ", "sv_rfs_trtobl_ratio", 1, 99, 0)

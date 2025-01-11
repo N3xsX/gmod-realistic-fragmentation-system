@@ -41,6 +41,12 @@ local function shootTraces(num, pos)
     }
     local traceResult = util.TraceLine(downTraceData)
     local isCloseToGround = traceResult.Hit and pos:Distance(traceResult.HitPos) < 10
+    local damage = GetConVar("sv_rfs_damage"):GetInt()
+    local ricochetEnabled = GetConVar("sv_rfs_enable_ricochet"):GetBool()
+    local isDebug = GetConVar("sv_rfs_debug"):GetBool()
+    local travelDistance = GetConVar("sv_rfs_fragments_travel_distance"):GetInt()
+    local ricochetAngle = GetConVar("sv_rfs_ricochet_angle"):GetInt()
+    local ricochetChance = GetConVar("sv_rfs_ricochet_chance"):GetInt() * 0.01
     for i = 1, num do
         local direction
         if isCloseToGround then 
@@ -56,44 +62,43 @@ local function shootTraces(num, pos)
                 direction = VectorRand():GetNormalized()
             end
         end
-        local distance = math.random(GetConVar("sv_rfs_fragments_travel_distance"):GetInt() / 2, GetConVar("sv_rfs_fragments_travel_distance"):GetInt()) / 0.02
+        local distance = math.random(travelDistance / 2, travelDistance) / 0.02
         local traceData = {
             start = pos,
             endpos = pos + direction * distance
         }
         local trace = util.TraceLine(traceData)
-        if GetConVar("sv_rfs_debug"):GetBool() then
-            debugoverlay.Line(traceData.start, trace.HitPos, 30, Color(255, 0, 0), false)
+        if isDebug then
+            debugoverlay.Line(traceData.start, trace.HitPos, 20, Color(255, 0, 0), false)
         end
-        if trace.Hit then
+        if trace.Hit and (trace.Entity:IsPlayer() or trace.Entity:IsNPC() or trace.Entity:IsNextBot()) then
+            trace.Entity:TakeDamage(damage)
+        end
+        if trace.Hit and ricochetEnabled then
             if (trace.HitPos - trace.StartPos):Length() >= 20 then -- prevent creating shrapnel too close to the explosion position
-            local impactAngle = direction:Dot(trace.HitNormal) * -1
-            if math.deg(math.acos(impactAngle)) > GetConVar("sv_rfs_ricochet_angle"):GetInt() and math.random() <= (GetConVar("sv_rfs_ricochet_chance"):GetInt() * 0.01 ) and GetConVar("sv_rfs_enable_ricochet"):GetBool() then
-                local ricochetDirection = (direction - 2 * direction:Dot(trace.HitNormal) * trace.HitNormal):GetNormalized()
-                local randomOffset = Vector(
-                    math.random(-1, 1) * 0.1,
-                    math.random(-1, 1) * 0.1,
-                    math.random(-1, 1) * 0.1
-                )
-                ricochetDirection = (ricochetDirection + randomOffset):GetNormalized()
-                local ricochetData = {
-                    start = trace.HitPos,
-                    endpos = trace.HitPos + ricochetDirection:GetNormalized() * distance / 2
-                }
+                local impactAngle = direction:Dot(trace.HitNormal) * -1
+                if math.deg(math.acos(impactAngle)) > ricochetAngle and math.random() <= ricochetChance then
+                    local ricochetDirection = (direction - 2 * direction:Dot(trace.HitNormal) * trace.HitNormal):GetNormalized()
+                    local randomOffset = Vector(math.random(-1, 1) * 0.1, math.random(-1, 1) * 0.1, math.random(-1, 1) * 0.1)
+                    ricochetDirection = (ricochetDirection + randomOffset):GetNormalized()
+                    local ricochetData = {
+                        start = trace.HitPos,
+                        endpos = trace.HitPos + ricochetDirection:GetNormalized() * distance / 2
+                    }
 
-                local ricochetSound = "rico" .. math.random(1, 3) .. ".wav"
-                sound.Play(ricochetSound, trace.HitPos, 75, 100, 1)
+                    if math.random() > 0.8 then
+                        local ricochetSound = "rico" .. math.random(1, 3) .. ".wav"
+                        sound.Play(ricochetSound, trace.HitPos, 75, 100, 1)
+                    end
                 
-                local ricochetTrace = util.TraceLine(ricochetData)
-                if ricochetTrace.Hit and (ricochetTrace.Entity:IsPlayer() or ricochetTrace.Entity:IsNPC() or ricochetTrace.Entity:IsNextBot()) then
-                    ricochetTrace.Entity:TakeDamage(GetConVar("sv_rfs_damage"):GetInt())
+                    local ricochetTrace = util.TraceLine(ricochetData)
+                    if ricochetTrace.Hit and (ricochetTrace.Entity:IsPlayer() or ricochetTrace.Entity:IsNPC() or ricochetTrace.Entity:IsNextBot()) then
+                        ricochetTrace.Entity:TakeDamage(damage)
+                    end
+                    if isDebug then
+                        debugoverlay.Line(ricochetData.start, ricochetTrace.HitPos, 20, Color(255, 255, 0), false)
+                    end
                 end
-                if GetConVar("sv_rfs_debug"):GetBool() then
-                    debugoverlay.Line(ricochetData.start, ricochetTrace.HitPos, 30, Color(255, 255, 0), false)
-                end
-            elseif trace.Entity:IsPlayer() or trace.Entity:IsNPC() or trace.Entity:IsNextBot() then
-                trace.Entity:TakeDamage(GetConVar("sv_rfs_damage"):GetInt())
-            end
             end
         end
     end
@@ -112,6 +117,13 @@ local function shootBullets(num, pos)
     effectData:SetOrigin(pos)
     local batchFragmentsEnabled = GetConVar("sv_rfs_batch_fragments"):GetBool()
     local directionEnabled = GetConVar("sv_rfs_fragment_direction"):GetBool()
+    local damage = GetConVar("sv_rfs_damage"):GetInt()
+    local ricochetEnabled = GetConVar("sv_rfs_enable_ricochet"):GetBool()
+    local tracer = GetConVar("sv_rfs_enable_bullet_traces"):GetInt()
+    local travelDistance = GetConVar("sv_rfs_fragments_travel_distance"):GetInt()
+    local ricochetAngle = GetConVar("sv_rfs_ricochet_angle"):GetInt()
+    local ricochetChance = GetConVar("sv_rfs_ricochet_chance"):GetInt() * 0.01
+    local source = name:GetPos() + Vector(0, 0, 5)
     local downTraceData = {
         start = pos,
         endpos = pos + Vector(0, 0, -10000)
@@ -140,17 +152,17 @@ local function shootBullets(num, pos)
                         end
                     end
                     fragment.Num = 1
-                    fragment.Src = name:GetPos() + Vector(0, 0, 5)
+                    fragment.Src = source
                     fragment.Dir = direction
-                    fragment.Distance = math.random(GetConVar("sv_rfs_fragments_travel_distance"):GetInt() / 2, GetConVar("sv_rfs_fragments_travel_distance"):GetInt()) / 0.02
+                    fragment.Distance = math.random(travelDistance / 2, travelDistance) / 0.02
                     fragment.Spread = Vector(0.01, 0.01, 0)
                     fragment.Tracer = 0
                     fragment.Force = 2
                     fragment.AmmoType = "grenadeFragments"
-                    fragment.Damage = GetConVar("sv_rfs_damage"):GetInt()              
+                    fragment.Damage = damage
                     if IsValid(name) then
                         name:FireBullets(fragment)
-                        if GetConVar("sv_rfs_enable_ricochet"):GetBool() then
+                        if ricochetEnabled then
                             local traceData = {
                                 start = fragment.Src,
                                 endpos = fragment.Src + fragment.Dir * fragment.Distance
@@ -159,13 +171,9 @@ local function shootBullets(num, pos)
                             if trace.Hit then
                                 if (trace.HitPos - trace.StartPos):Length() >= 20 then
                                     local impactAngle = fragment.Dir:Dot(trace.HitNormal) * -1
-                                    if math.deg(math.acos(impactAngle)) > GetConVar("sv_rfs_ricochet_angle"):GetInt() and math.random() <= (GetConVar("sv_rfs_ricochet_chance"):GetInt() * 0.01) then
+                                    if math.deg(math.acos(impactAngle)) > ricochetAngle and math.random() <= ricochetChance then
                                         local ricochetDirection = (fragment.Dir - 2 * fragment.Dir:Dot(trace.HitNormal) * trace.HitNormal):GetNormalized()
-                                        local randomOffset = Vector(
-                                            math.random(-1, 1) * 0.1,
-                                            math.random(-1, 1) * 0.1,
-                                            math.random(-1, 1) * 0.1
-                                        )
+                                        local randomOffset = Vector(math.random(-1, 1) * 0.1, math.random(-1, 1) * 0.1, math.random(-1, 1) * 0.1)
                                         ricochetDirection = (ricochetDirection + randomOffset):GetNormalized()
                 
                                         local ricochetFragment = {}
@@ -181,8 +189,10 @@ local function shootBullets(num, pos)
                 
                                         name:FireBullets(ricochetFragment)
                 
-                                        local ricochetSound = "rico" .. math.random(1, 3) .. ".wav"
-                                        sound.Play(ricochetSound, trace.HitPos, 75, 100, 1)
+                                        if math.random() > 0.8 then
+                                            local ricochetSound = "rico" .. math.random(1, 3) .. ".wav"
+                                            sound.Play(ricochetSound, trace.HitPos, 75, 100, 1)
+                                        end
                                     end
                                 end
                             end
@@ -209,32 +219,28 @@ local function shootBullets(num, pos)
                 end
             end
             fragment.Num = 1
-            fragment.Src = name:GetPos() + Vector(0, 0, 5)
+            fragment.Src = source
             fragment.Dir = direction
-            fragment.Distance = math.random(GetConVar("sv_rfs_fragments_travel_distance"):GetInt() / 2, GetConVar("sv_rfs_fragments_travel_distance"):GetInt()) / 0.02
+            fragment.Distance = math.random(travelDistance / 2, travelDistance) / 0.02
             fragment.Spread = Vector(0.01, 0.01, 0)
-            fragment.Tracer = GetConVar("sv_rfs_enable_bullet_traces"):GetInt()
+            fragment.Tracer = tracer
             fragment.Force = 2
             fragment.AmmoType = "grenadeFragments"
-            fragment.Damage = GetConVar("sv_rfs_damage"):GetInt()
+            fragment.Damage = damage
             if IsValid(name) then
                 name:FireBullets(fragment)
-                if GetConVar("sv_rfs_enable_ricochet"):GetBool() then
+                if ricochetEnabled then
                     local traceData = {
                         start = fragment.Src,
                         endpos = fragment.Src + fragment.Dir * fragment.Distance
                     }
                     local trace = util.TraceLine(traceData)
                     if trace.Hit then
-                        if (trace.HitPos - trace.StartPos):Length() >= 20 then -- prevent creating shrapnel too close to the explosion position
+                        if (trace.HitPos - trace.StartPos):Length() >= 20 then
                             local impactAngle = fragment.Dir:Dot(trace.HitNormal) * -1
-                            if math.deg(math.acos(impactAngle)) > GetConVar("sv_rfs_ricochet_angle"):GetInt() and math.random() <= (GetConVar("sv_rfs_ricochet_chance"):GetInt() * 0.01) then
+                            if math.deg(math.acos(impactAngle)) > ricochetAngle and math.random() <= ricochetChance then
                                 local ricochetDirection = (fragment.Dir - 2 * fragment.Dir:Dot(trace.HitNormal) * trace.HitNormal):GetNormalized()
-                                local randomOffset = Vector(
-                                    math.random(-1, 1) * 0.1,
-                                    math.random(-1, 1) * 0.1,
-                                    math.random(-1, 1) * 0.1
-                                )
+                                local randomOffset = Vector(math.random(-1, 1) * 0.1, math.random(-1, 1) * 0.1, math.random(-1, 1) * 0.1)
                                 ricochetDirection = (ricochetDirection + randomOffset):GetNormalized()
         
                                 local ricochetFragment = {}
@@ -250,8 +256,10 @@ local function shootBullets(num, pos)
         
                                 name:FireBullets(ricochetFragment)
         
-                                local ricochetSound = "rico" .. math.random(1, 3) .. ".wav"
-                                sound.Play(ricochetSound, trace.HitPos, 75, 100, 1)
+                                if math.random() > 0.8 then
+                                    local ricochetSound = "rico" .. math.random(1, 3) .. ".wav"
+                                    sound.Play(ricochetSound, trace.HitPos, 75, 100, 1)
+                                end
                             end
                         end
                     end
