@@ -35,7 +35,6 @@ end)
 
 local fragmentsType = GetConVar("sv_rfs_fragments_type"):GetInt()
 local damage = GetConVar("sv_rfs_damage"):GetInt()
-local maxTotalDamage = GetConVar("sv_rfs_max_fragment_damage"):GetInt()
 local ricochetEnabled = GetConVar("sv_rfs_enable_ricochet"):GetBool()
 local isDebug = GetConVar("sv_rfs_debug"):GetBool()
 local travelDistance = GetConVar("sv_rfs_fragments_travel_distance"):GetInt()
@@ -46,7 +45,6 @@ local directionEnabled = GetConVar("sv_rfs_fragment_direction"):GetBool()
 local function UpdateVars()
     fragmentsType = GetConVar("sv_rfs_fragments_type"):GetInt()
     damage = GetConVar("sv_rfs_damage"):GetInt()
-    maxTotalDamage = GetConVar("sv_rfs_max_fragment_damage"):GetInt()
     ricochetEnabled = GetConVar("sv_rfs_enable_ricochet"):GetBool()
     isDebug = GetConVar("sv_rfs_debug"):GetBool()
     travelDistance = GetConVar("sv_rfs_fragments_travel_distance"):GetInt()
@@ -57,7 +55,6 @@ end
 
 cvars.AddChangeCallback("sv_rfs_fragments_type", UpdateVars)
 cvars.AddChangeCallback("sv_rfs_damage", UpdateVars)
-cvars.AddChangeCallback("sv_rfs_max_fragment_damage", UpdateVars)
 cvars.AddChangeCallback("sv_rfs_enable_ricochet", UpdateVars)
 cvars.AddChangeCallback("sv_rfs_debug", UpdateVars)
 cvars.AddChangeCallback("sv_rfs_fragments_travel_distance", UpdateVars)
@@ -77,11 +74,11 @@ local function shootTraces(num, pos)
     local traceResult = util.TraceLine(downTraceData)
     local isCloseToGround = traceResult.Hit and pos:Distance(traceResult.HitPos) < 10
     local damageTracker = {}
+    local maxTotalDamage = GetConVar("sv_rfs_max_fragment_damage"):GetInt()
     if fragmentsType == 2 then
         maxTotalDamage = maxTotalDamage / 2
     end
-    local inWater = false
-    if isInWater(pos) then inWater = true end
+    local inWater = isInWater(pos)
     for i = 1, num do
         local direction
         if isCloseToGround then 
@@ -183,11 +180,11 @@ local function shootBullets(num, pos)
     local traceResult = util.TraceLine(downTraceData)
     local isCloseToGround = traceResult.Hit and pos:Distance(traceResult.HitPos) < 10
     local damageTracker = {}
+    local maxTotalDamage = GetConVar("sv_rfs_max_fragment_damage"):GetInt()
     if fragmentsType == 2 then
         maxTotalDamage = maxTotalDamage / 2
     end
-    local inWater = false
-    if isInWater(pos) then inWater = true end
+    local inWater = isInWater(pos)
 
     if batchFragmentsEnabled then -- i dunno if this even improves something
         local fragmentsPerBatch = math.floor(num / 5)
