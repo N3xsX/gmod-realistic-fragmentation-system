@@ -1,8 +1,6 @@
 AddCSLuaFile()
 
 if CLIENT then
-    include("client/cl_shrapnell.lua")
-    include("client/cl_shrapnell_whitelist.lua")
     CreateClientConVar("cl_rfs_sound", '1', true, false)
     CreateClientConVar("cl_show_sound_names", '0', true, false)
 end
@@ -20,6 +18,7 @@ if SERVER then
     CreateConVar("sv_rfs_fragments_travel_distance", '100', {FCVAR_ARCHIVE} , "", 10, 1000 )
     CreateConVar("sv_rfs_debug", '0', {FCVAR_ARCHIVE} , "", 0, 1 )
     CreateConVar("sv_rfs_fragment_direction", "1", {FCVAR_ARCHIVE}, "", 0, 1)
+    CreateConVar("sv_rfs_max_fragment_damage", "1000", {FCVAR_ARCHIVE}, "", 1, 10000)
 end
 
 CreateConVar("sv_rfs_enable_ricochet", '1', {FCVAR_ARCHIVE, FCVAR_REPLICATED} , "", 0, 1 )
@@ -72,8 +71,10 @@ hook.Add("PopulateToolMenu", "RFSOptions", function()
             panel:NumSlider("Fragment travel distance (m) ", "sv_rfs_fragments_travel_distance", 10, 1000, 0)
             panel:ControlHelp("Sets the maximum fragment travel distance in meters. If the distance between the explosion and the player or NPC exceeds this value, the fragments will not spawn to save performance")
             panel:NumSlider("Fragment Count ", "sv_rfs_fragments", 1, 3000, 0)
-            panel:ControlHelp("Selecting a number higher than 500 may cause lag spikes and is not recommended.")
+            panel:ControlHelp("Selecting a number higher than 500 may cause lag spikes and is not recommended")
             panel:NumSlider("Fragment Damage ", "sv_rfs_damage", 1, 100, 0)
+            panel:NumSlider("Max Fragment Damage ", "sv_rfs_max_fragment_damage", 1, 10000, 0)
+            panel:ControlHelp("Maximum ammount of damage that fragments from one explosion can deal")
             panel:NumSlider("Bullets to traces ratio (%) ", "sv_rfs_trtobl_ratio", 1, 99, 0)
             panel:ControlHelp("Lower number, less bullets")
             panel:Help("")

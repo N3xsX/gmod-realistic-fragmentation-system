@@ -33,20 +33,55 @@ net.Receive("RFSUpdateWhitelist", function(len, ply)
     sendWhitelistToClients()
 end)
 
+local fragmentsType = GetConVar("sv_rfs_fragments_type"):GetInt()
+local damage = GetConVar("sv_rfs_damage"):GetInt()
+local maxTotalDamage = GetConVar("sv_rfs_max_fragment_damage"):GetInt()
+local ricochetEnabled = GetConVar("sv_rfs_enable_ricochet"):GetBool()
+local isDebug = GetConVar("sv_rfs_debug"):GetBool()
+local travelDistance = GetConVar("sv_rfs_fragments_travel_distance"):GetInt()
+local ricochetAngle = GetConVar("sv_rfs_ricochet_angle"):GetInt()
+local ricochetChance = GetConVar("sv_rfs_ricochet_chance"):GetInt() * 0.01
+local directionEnabled = GetConVar("sv_rfs_fragment_direction"):GetBool()
+
+local function UpdateVars()
+    fragmentsType = GetConVar("sv_rfs_fragments_type"):GetInt()
+    damage = GetConVar("sv_rfs_damage"):GetInt()
+    maxTotalDamage = GetConVar("sv_rfs_max_fragment_damage"):GetInt()
+    ricochetEnabled = GetConVar("sv_rfs_enable_ricochet"):GetBool()
+    isDebug = GetConVar("sv_rfs_debug"):GetBool()
+    travelDistance = GetConVar("sv_rfs_fragments_travel_distance"):GetInt()
+    ricochetAngle = GetConVar("sv_rfs_ricochet_angle"):GetInt()
+    ricochetChance = GetConVar("sv_rfs_ricochet_chance"):GetInt() * 0.01
+    directionEnabled = GetConVar("sv_rfs_fragment_direction"):GetBool()
+end
+
+cvars.AddChangeCallback("sv_rfs_fragments_type", UpdateVars)
+cvars.AddChangeCallback("sv_rfs_damage", UpdateVars)
+cvars.AddChangeCallback("sv_rfs_max_fragment_damage", UpdateVars)
+cvars.AddChangeCallback("sv_rfs_enable_ricochet", UpdateVars)
+cvars.AddChangeCallback("sv_rfs_debug", UpdateVars)
+cvars.AddChangeCallback("sv_rfs_fragments_travel_distance", UpdateVars)
+cvars.AddChangeCallback("sv_rfs_ricochet_angle", UpdateVars)
+cvars.AddChangeCallback("sv_rfs_ricochet_chance", UpdateVars)
+cvars.AddChangeCallback("sv_rfs_fragment_direction", UpdateVars)
+
+local function isInWater(pos)
+    return bit.band(util.PointContents(pos), CONTENTS_WATER) == CONTENTS_WATER
+end
+
 local function shootTraces(num, pos)
-    local directionEnabled = GetConVar("sv_rfs_fragment_direction"):GetBool()
     local downTraceData = {
         start = pos,
         endpos = pos + Vector(0, 0, -10000)
     }
     local traceResult = util.TraceLine(downTraceData)
     local isCloseToGround = traceResult.Hit and pos:Distance(traceResult.HitPos) < 10
-    local damage = GetConVar("sv_rfs_damage"):GetInt()
-    local ricochetEnabled = GetConVar("sv_rfs_enable_ricochet"):GetBool()
-    local isDebug = GetConVar("sv_rfs_debug"):GetBool()
-    local travelDistance = GetConVar("sv_rfs_fragments_travel_distance"):GetInt()
-    local ricochetAngle = GetConVar("sv_rfs_ricochet_angle"):GetInt()
-    local ricochetChance = GetConVar("sv_rfs_ricochet_chance"):GetInt() * 0.01
+    local damageTracker = {}
+    if fragmentsType == 2 then
+        maxTotalDamage = maxTotalDamage / 2
+    end
+    local inWater = false
+    if isInWater(pos) then inWater = true end
     for i = 1, num do
         local direction
         if isCloseToGround then 
@@ -63,6 +98,9 @@ local function shootTraces(num, pos)
             end
         end
         local distance = math.random(travelDistance / 2, travelDistance) / 0.02
+        if inWater then
+            distance = distance * 0.2
+        end
         local traceData = {
             start = pos,
             endpos = pos + direction * distance
@@ -72,7 +110,17 @@ local function shootTraces(num, pos)
             debugoverlay.Line(traceData.start, trace.HitPos, 20, Color(255, 0, 0), false)
         end
         if trace.Hit and (trace.Entity:IsPlayer() or trace.Entity:IsNPC() or trace.Entity:IsNextBot()) then
-            trace.Entity:TakeDamage(damage)
+            local target = trace.Entity
+            local appliedDamage = damage
+            if not damageTracker[target] then
+                damageTracker[target] = 0
+            end
+            local remainingDamage = maxTotalDamage - damageTracker[target]
+            if remainingDamage > 0 then
+                appliedDamage = math.min(appliedDamage, remainingDamage)
+                target:TakeDamage(appliedDamage)
+                damageTracker[target] = damageTracker[target] + appliedDamage
+            end
         end
         if trace.Hit and ricochetEnabled then
             if (trace.HitPos - trace.StartPos):Length() >= 20 then -- prevent creating shrapnel too close to the explosion position
@@ -93,7 +141,17 @@ local function shootTraces(num, pos)
                 
                     local ricochetTrace = util.TraceLine(ricochetData)
                     if ricochetTrace.Hit and (ricochetTrace.Entity:IsPlayer() or ricochetTrace.Entity:IsNPC() or ricochetTrace.Entity:IsNextBot()) then
-                        ricochetTrace.Entity:TakeDamage(damage)
+                        local target = trace.Entity
+                        local appliedDamage = damage
+                        if not damageTracker[target] then
+                            damageTracker[target] = 0
+                        end
+                        local remainingDamage = maxTotalDamage - damageTracker[target]
+                        if remainingDamage > 0 then
+                            appliedDamage = math.min(appliedDamage, remainingDamage)
+                            target:TakeDamage(appliedDamage)
+                            damageTracker[target] = damageTracker[target] + appliedDamage
+                        end
                     end
                     if isDebug then
                         debugoverlay.Line(ricochetData.start, ricochetTrace.HitPos, 20, Color(255, 255, 0), false)
@@ -116,13 +174,7 @@ local function shootBullets(num, pos)
     local effectData = EffectData()
     effectData:SetOrigin(pos)
     local batchFragmentsEnabled = GetConVar("sv_rfs_batch_fragments"):GetBool()
-    local directionEnabled = GetConVar("sv_rfs_fragment_direction"):GetBool()
-    local damage = GetConVar("sv_rfs_damage"):GetInt()
-    local ricochetEnabled = GetConVar("sv_rfs_enable_ricochet"):GetBool()
     local tracer = GetConVar("sv_rfs_enable_bullet_traces"):GetInt()
-    local travelDistance = GetConVar("sv_rfs_fragments_travel_distance"):GetInt()
-    local ricochetAngle = GetConVar("sv_rfs_ricochet_angle"):GetInt()
-    local ricochetChance = GetConVar("sv_rfs_ricochet_chance"):GetInt() * 0.01
     local source = name:GetPos() + Vector(0, 0, 5)
     local downTraceData = {
         start = pos,
@@ -130,6 +182,12 @@ local function shootBullets(num, pos)
     }
     local traceResult = util.TraceLine(downTraceData)
     local isCloseToGround = traceResult.Hit and pos:Distance(traceResult.HitPos) < 10
+    local damageTracker = {}
+    if fragmentsType == 2 then
+        maxTotalDamage = maxTotalDamage / 2
+    end
+    local inWater = false
+    if isInWater(pos) then inWater = true end
 
     if batchFragmentsEnabled then -- i dunno if this even improves something
         local fragmentsPerBatch = math.floor(num / 5)
@@ -151,17 +209,40 @@ local function shootBullets(num, pos)
                             direction = VectorRand():GetNormalized()
                         end
                     end
+                    local distance = math.random(travelDistance / 2, travelDistance) / 0.02
+                    if inWater then
+                        distance = distance * 0.2
+                    end
                     fragment.Num = 1
                     fragment.Src = source
                     fragment.Dir = direction
-                    fragment.Distance = math.random(travelDistance / 2, travelDistance) / 0.02
+                    fragment.Distance = distance
                     fragment.Spread = Vector(0.01, 0.01, 0)
                     fragment.Tracer = 0
                     fragment.Force = 2
                     fragment.AmmoType = "grenadeFragments"
                     fragment.Damage = damage
                     if IsValid(name) then
+                        hook.Add("EntityTakeDamage", "LimitBulletDamage_" .. tostring(name), function(target, dmgInfo)
+                            if target:IsPlayer() or target:IsNPC() or target:IsNextBot() then
+                                local appliedDamage = dmgInfo:GetDamage()
+                                if not damageTracker[target] then
+                                    damageTracker[target] = 0
+                                end
+                                local remainingDamage = maxTotalDamage - damageTracker[target]
+                                if remainingDamage > 0 then
+                                    appliedDamage = math.min(appliedDamage, remainingDamage)
+                                    damageTracker[target] = damageTracker[target] + appliedDamage
+                                    dmgInfo:SetDamage(appliedDamage)
+                                else
+                                    dmgInfo:SetDamage(0)
+                                end
+                            end
+                        end)
                         name:FireBullets(fragment)
+                        timer.Simple(0.04, function()
+                            hook.Remove("EntityTakeDamage", "LimitBulletDamage_" .. tostring(name))
+                        end)
                         if ricochetEnabled then
                             local traceData = {
                                 start = fragment.Src,
@@ -186,8 +267,29 @@ local function shootBullets(num, pos)
                                         ricochetFragment.Force = fragment.Force / 2
                                         ricochetFragment.AmmoType = fragment.AmmoType
                                         ricochetFragment.Damage = fragment.Damage / 2
+
+                                        hook.Add("EntityTakeDamage", "LimitBulletDamagev2_" .. tostring(name), function(target, dmgInfo)
+                                            if target:IsPlayer() or target:IsNPC() or target:IsNextBot() then
+                                                local appliedDamage = dmgInfo:GetDamage()
+                                                if not damageTracker[target] then
+                                                    damageTracker[target] = 0
+                                                end
+                                                local remainingDamage = maxTotalDamage - damageTracker[target]
+                                                if remainingDamage > 0 then
+                                                    appliedDamage = math.min(appliedDamage, remainingDamage)
+                                                    damageTracker[target] = damageTracker[target] + appliedDamage
+                                                    dmgInfo:SetDamage(appliedDamage)
+                                                else
+                                                    dmgInfo:SetDamage(0)
+                                                end
+                                            end
+                                        end)
                 
                                         name:FireBullets(ricochetFragment)
+
+                                        timer.Simple(0.1, function()
+                                            hook.Remove("EntityTakeDamage", "LimitBulletDamagev2_" .. tostring(name))
+                                        end)
                 
                                         if math.random() > 0.8 then
                                             local ricochetSound = "rico" .. math.random(1, 3) .. ".wav"
@@ -218,17 +320,40 @@ local function shootBullets(num, pos)
                     direction = VectorRand():GetNormalized()
                 end
             end
+            local distance = math.random(travelDistance / 2, travelDistance) / 0.02
+            if inWater then
+                distance = distance * 0.2
+            end
             fragment.Num = 1
             fragment.Src = source
             fragment.Dir = direction
-            fragment.Distance = math.random(travelDistance / 2, travelDistance) / 0.02
+            fragment.Distance = distance
             fragment.Spread = Vector(0.01, 0.01, 0)
             fragment.Tracer = tracer
             fragment.Force = 2
             fragment.AmmoType = "grenadeFragments"
             fragment.Damage = damage
             if IsValid(name) then
+                hook.Add("EntityTakeDamage", "LimitBulletDamage_" .. tostring(name), function(target, dmgInfo)
+                    if target:IsPlayer() or target:IsNPC() or target:IsNextBot() then
+                        local appliedDamage = dmgInfo:GetDamage()
+                        if not damageTracker[target] then
+                            damageTracker[target] = 0
+                        end
+                        local remainingDamage = maxTotalDamage - damageTracker[target]
+                        if remainingDamage > 0 then
+                            appliedDamage = math.min(appliedDamage, remainingDamage)
+                            damageTracker[target] = damageTracker[target] + appliedDamage
+                            dmgInfo:SetDamage(appliedDamage)
+                        else
+                            dmgInfo:SetDamage(0)
+                        end
+                    end
+                end)
                 name:FireBullets(fragment)
+                timer.Simple(0.1, function()
+                    hook.Remove("EntityTakeDamage", "LimitBulletDamage_" .. tostring(name))
+                end)
                 if ricochetEnabled then
                     local traceData = {
                         start = fragment.Src,
@@ -253,8 +378,29 @@ local function shootBullets(num, pos)
                                 ricochetFragment.Force = fragment.Force / 2
                                 ricochetFragment.AmmoType = fragment.AmmoType
                                 ricochetFragment.Damage = fragment.Damage / 2
+
+                                hook.Add("EntityTakeDamage", "LimitBulletDamagev2_" .. tostring(name), function(target, dmgInfo)
+                                    if target:IsPlayer() or target:IsNPC() or target:IsNextBot() then
+                                        local appliedDamage = dmgInfo:GetDamage()
+                                        if not damageTracker[target] then
+                                            damageTracker[target] = 0
+                                        end
+                                        local remainingDamage = maxTotalDamage - damageTracker[target]
+                                        if remainingDamage > 0 then
+                                            appliedDamage = math.min(appliedDamage, remainingDamage)
+                                            damageTracker[target] = damageTracker[target] + appliedDamage
+                                            dmgInfo:SetDamage(appliedDamage)
+                                        else
+                                            dmgInfo:SetDamage(0)
+                                        end
+                                    end
+                                end)
         
                                 name:FireBullets(ricochetFragment)
+
+                                timer.Simple(0.1, function()
+                                    hook.Remove("EntityTakeDamage", "LimitBulletDamagev2_" .. tostring(name))
+                                end)
         
                                 if math.random() > 0.8 then
                                     local ricochetSound = "rico" .. math.random(1, 3) .. ".wav"
@@ -331,35 +477,32 @@ local function rfsMultiplayer(explosionPosition, explosionName)
         end
     end
 
-    timer.Simple(0.11, function ()
-        if explosionPosition then
-            if not checkDistance(explosionPosition) then return end
-            if fragmentsType == 0 then
-                shootTraces(fragments, explosionPosition)
-            elseif fragmentsType == 1 then
-                shootBullets(fragments, explosionPosition)
-            elseif fragmentsType == 2 then
-                shootMixed(fragments, explosionPosition)
-            end
+    if explosionPosition then
+        if not checkDistance(explosionPosition) then return end
+        if fragmentsType == 0 then
+            shootTraces(fragments, explosionPosition)
+        elseif fragmentsType == 1 then
+            shootBullets(fragments, explosionPosition)
+        elseif fragmentsType == 2 then
+            shootMixed(fragments, explosionPosition)
         end
-    end)
+    end
 end
 
 local function rfsSingleplayer(explosionPosition)
     local fragments = GetConVar("sv_rfs_fragments"):GetInt()
     local fragmentsType = GetConVar("sv_rfs_fragments_type"):GetInt()
-    timer.Simple(0.001, function ()
-        if explosionPosition then
-            if not checkDistance(explosionPosition) then return end
-            if fragmentsType == 0 then
-                shootTraces(fragments, explosionPosition)
-            elseif fragmentsType == 1 then
-                shootBullets(fragments, explosionPosition)
-            elseif fragmentsType == 2 then
-                shootMixed(fragments, explosionPosition)
-            end
+    
+    if explosionPosition then
+        if not checkDistance(explosionPosition) then return end
+        if fragmentsType == 0 then
+            shootTraces(fragments, explosionPosition)
+        elseif fragmentsType == 1 then
+            shootBullets(fragments, explosionPosition)
+        elseif fragmentsType == 2 then
+            shootMixed(fragments, explosionPosition)
         end
-    end)
+    end
 end
 
 local function isExplosionDuplicate(explosionPosition)
