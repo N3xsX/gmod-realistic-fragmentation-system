@@ -24,7 +24,7 @@ local function updateWhitelistPanel(panel)
             textEntry:SetValue("")
             updateWhitelistPanel(panel)
         else
-            notification.AddLegacy("Please enter a valid sound path containing at least one letter.", NOTIFY_ERROR, 5)
+            notification.AddLegacy("Please enter a valid sound path containing at least one letter", NOTIFY_ERROR, 5)
             surface.PlaySound("buttons/button10.wav")
         end
     end
@@ -61,7 +61,6 @@ local function updateWhitelistPanel(panel)
         end
     end
     panel:AddItem(deleteButton)
-    panel:Help("To add a sound, type the path in the box above and click 'Add Sound'. To remove a sound, select it from the list and click 'Remove Selected Sound'.")
     if not game.SinglePlayer() then
         local rfsWhitelistJson = util.TableToJSON(rfsWhitelist)
         net.Start("RFSUpdateWhitelist")
@@ -74,13 +73,13 @@ hook.Add("PopulateToolMenu", "RFSWhitelist", function()
     spawnmenu.AddToolMenuOption("Options", "Realistic Fragmentation System", "RFS Whitelist", "Whitelist", "", "", function(panel)
         local isAdmin = LocalPlayer():IsAdmin()
         if game.SinglePlayer() then
-            panel:Help("Manage the whitelist for RFS sounds.")
+            panel:Help("Manage the whitelist for RFS sounds")
             updateWhitelistPanel(panel)
         elseif not game.SinglePlayer() and isAdmin then
-            panel:Help("Manage the whitelist for RFS sounds.")
+            panel:Help("Manage the whitelist for RFS sounds")
             updateWhitelistPanel(panel)
         elseif not game.SinglePlayer() and not isAdmin then
-            panel:Help("You cannot edit the server whitelist.")
+            panel:Help("You cannot edit the server whitelist")
         end
     end)
 end)

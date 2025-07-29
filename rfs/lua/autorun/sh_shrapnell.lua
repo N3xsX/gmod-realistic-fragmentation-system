@@ -1,37 +1,13 @@
 AddCSLuaFile()
 
-if CLIENT then
-    CreateClientConVar("cl_rfs_sound", '1', true, false)
-    CreateClientConVar("cl_show_sound_names", '0', true, false)
-end
-
-if SERVER then
-    AddCSLuaFile("client/cl_shrapnell.lua")
-    AddCSLuaFile("client/cl_shrapnell_whitelist.lua")
-    CreateConVar("sv_rfs_damage", '20', {FCVAR_ARCHIVE} , "", 1, 100 )
-    CreateConVar("sv_rfs_batch_fragments", '0', {FCVAR_ARCHIVE} , "", 0, 1 )
-    CreateConVar("sv_rfs_trtobl_ratio", '50', {FCVAR_ARCHIVE} , "", 1, 99 )
-    CreateConVar("sv_rfs_fragments_type", '2', {FCVAR_ARCHIVE} , "", 0, 2 )
-    CreateConVar("sv_rfs_enable_bullet_traces", '1', {FCVAR_ARCHIVE} , "", 0, 1 )
-    CreateConVar("sv_rfs_ricochet_angle", '50', {FCVAR_ARCHIVE} , "", 0, 90 )
-    CreateConVar("sv_rfs_ricochet_chance", '50', {FCVAR_ARCHIVE} , "", 1, 100 )
-    CreateConVar("sv_rfs_fragments_travel_distance", '100', {FCVAR_ARCHIVE} , "", 10, 1000 )
-    CreateConVar("sv_rfs_debug", '0', {FCVAR_ARCHIVE} , "", 0, 1 )
-    CreateConVar("sv_rfs_fragment_direction", "1", {FCVAR_ARCHIVE}, "", 0, 1)
-    CreateConVar("sv_rfs_max_fragment_damage", "1000", {FCVAR_ARCHIVE}, "", 1, 10000)
-end
-
-CreateConVar("sv_rfs_enable_ricochet", '1', {FCVAR_ARCHIVE, FCVAR_REPLICATED} , "", 0, 1 )
-CreateConVar("sv_rfs_fragments", '250', {FCVAR_ARCHIVE, FCVAR_REPLICATED} , "", 1, 3000 )
-
 -- for dwr
 hook.Add( "Initialize", "grenadeFragments", function()
     game.AddAmmoType({
         name = "grenadeFragments",
         dmgtype = DMG_BULLET,
         tracer = TRACER_LINE,
-        plydmg = sv_rfs_damage,
-        npcdmg = sv_rfs_damage,
+        plydmg = GetConVar("sv_rfs_damage"):GetInt(),
+        npcdmg = GetConVar("sv_rfs_damage"):GetInt(),
     })
 end)
 
