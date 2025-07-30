@@ -35,16 +35,15 @@ net.Receive("RFSUpdateWhitelist", function(len, ply)
     sendWhitelistToClients()
 end)
 
-local fragments = CreateConVar("sv_rfs_fragments", '250', { FCVAR_ARCHIVE, FCVAR_REPLICATED }, "", 1, 3000)
+local fragments = CreateConVar("sv_rfs_fragments", '500', { FCVAR_ARCHIVE, FCVAR_REPLICATED }, "", 1, 3000)
 local fragmentsType = CreateConVar("sv_rfs_fragments_type", '2', { FCVAR_ARCHIVE }, "", 0, 2)
-local damage = CreateConVar("sv_rfs_damage", '20', { FCVAR_ARCHIVE }, "", 1, 100)
+local damage = CreateConVar("sv_rfs_damage", '15', { FCVAR_ARCHIVE }, "", 1, 100)
 local ricochetEnabled = CreateConVar("sv_rfs_enable_ricochet", '1', { FCVAR_ARCHIVE, FCVAR_REPLICATED }, "", 0, 1)
 local isDebug = CreateConVar("sv_rfs_debug", '0', { FCVAR_ARCHIVE }, "", 0, 1)
 local travelDistance = CreateConVar("sv_rfs_fragments_travel_distance", '100', { FCVAR_ARCHIVE }, "", 10, 1000)
 local ricochetAngle = CreateConVar("sv_rfs_ricochet_angle", '50', { FCVAR_ARCHIVE }, "", 0, 90)
 local ricochetChance = CreateConVar("sv_rfs_ricochet_chance", '50', { FCVAR_ARCHIVE }, "", 1, 100)
 local directionEnabled = CreateConVar("sv_rfs_fragment_direction", "1", { FCVAR_ARCHIVE }, "", 0, 1)
---local batchFragmentsEnabled = CreateConVar("sv_rfs_batch_fragments", '0', { FCVAR_ARCHIVE }, "", 0, 1)
 local tracer = CreateConVar("sv_rfs_enable_bullet_traces", '1', { FCVAR_ARCHIVE }, "", 0, 1)
 local TotalDamage = CreateConVar("sv_rfs_max_fragment_damage", "1000", { FCVAR_ARCHIVE }, "", 1, 10000)
 local frgRatio = CreateConVar("sv_rfs_trtobl_ratio", '50', { FCVAR_ARCHIVE }, "", 1, 99)
@@ -72,101 +71,105 @@ local function setDirection(isCloseToGround)
 end
 
 local function shootTraces(num, pos)
-    local downTraceData = {
+    local downTrace = util.TraceLine({
         start = pos,
         endpos = pos + Vector(0, 0, -10000)
-    }
-    local hitCount = 0
-    local missCount = 0
-    local ricochetCount = 0
-    local traceResult = util.TraceLine(downTraceData)
-    local isCloseToGround = traceResult.Hit and pos:Distance(traceResult.HitPos) < 10
-    local damageTracker = {}
-    local maxTotalDamage = TotalDamage:GetInt()
-    if fragmentsType:GetInt() == 2 then
-        maxTotalDamage = maxTotalDamage / 2
-    end
+    })
+
+    local isCloseToGround = downTrace.Hit and pos:Distance(downTrace.HitPos) < 10
     local inWater = isInWater(pos)
+    local maxDamage = TotalDamage:GetInt()
+    if fragmentsType:GetInt() == 2 then
+        maxDamage = maxDamage / 2
+    end
+
+    local applyDamage = damage:GetInt()
+    local travelDist = travelDistance:GetInt()
+    local allowRicochet = ricochetEnabled:GetBool()
+    local ricochetAng = ricochetAngle:GetInt()
+    local ricochetProb = ricochetChance:GetInt() * 0.01
+    local debug = isDebug:GetBool()
+
+    local hitCount, missCount, ricochetCount = 0, 0, 0
+    local damageTracker = {}
+
     for i = 1, num do
         local direction = setDirection(isCloseToGround)
-        local distance = math.random(travelDistance:GetInt() / 2, travelDistance:GetInt()) / 0.02
-        if inWater then
-            distance = distance * 0.2
-        end
-        local traceData = {
-            start = pos,
-            endpos = pos + direction * distance,
-        }
-        local trace = util.TraceLine(traceData)
-        if isDebug:GetBool() then
-            if trace.Hit then
-                hitCount = hitCount + 1
-            else
-                missCount = missCount + 1
-            end
-            debugoverlay.Line(traceData.start, trace.HitPos, 20, Color(255, 0, 0), false)
+        local distance = math.random(travelDist / 2, travelDist) / 0.02
+        if inWater then distance = distance * 0.2 end
+
+        local traceStart = pos
+        local traceEnd = pos + direction * distance
+        local trace = util.TraceLine({ start = traceStart, endpos = traceEnd })
+
+        if debug then
+            if trace.Hit then hitCount = hitCount + 1 else missCount = missCount + 1 end
+            debugoverlay.Line(traceStart, trace.HitPos, 20, Color(255, 0, 0), false)
             if IsValid(trace.Entity) and (trace.Entity:IsPlayer() or trace.Entity:IsNPC() or trace.Entity:GetClass():find("prop_")) then
                 debugoverlay.Cross(trace.HitPos, 5, 20, Color(0, 255, 0), false)
                 debugoverlay.Text(trace.HitPos, trace.Entity:GetClass(), 20)
             end
         end
-        if trace.Hit and (IsValid(trace.Entity) and (trace.Entity:IsPlayer() or trace.Entity:IsNPC() or trace.Entity:IsNextBot())) then
+
+        --apply damage if valid target
+        if trace.Hit and IsValid(trace.Entity) and (trace.Entity:IsPlayer() or trace.Entity:IsNPC() or trace.Entity:IsNextBot()) then
             local target = trace.Entity
-            local appliedDamage = damage:GetInt()
-            if not damageTracker[target] then
-                damageTracker[target] = 0
-            end
-            local remainingDamage = maxTotalDamage - damageTracker[target]
-            if remainingDamage > 0 then
-                appliedDamage = math.min(appliedDamage, remainingDamage)
-                target:TakeDamage(appliedDamage)
-                damageTracker[target] = damageTracker[target] + appliedDamage
+            damageTracker[target] = damageTracker[target] or 0
+            local remaining = maxDamage - damageTracker[target]
+            if remaining > 0 then
+                local dmg = math.min(applyDamage, remaining)
+                target:TakeDamage(dmg)
+                damageTracker[target] = damageTracker[target] + dmg
             end
         end
-        if trace.Hit and ricochetEnabled:GetBool() and not (IsValid(trace.Entity) and (trace.Entity:IsPlayer() or trace.Entity:IsNPC() or trace.Entity:IsNextBot())) then
-            if (trace.HitPos - trace.StartPos):Length() >= 20 then -- prevent creating shrapnel too close to the explosion position
-                local impactAngle = direction:Dot(trace.HitNormal) * -1
-                if math.deg(math.acos(impactAngle)) > ricochetAngle:GetInt() and math.random() <= (ricochetChance:GetInt() * 0.01) then
-                    local ricochetDirection = (direction - 2 * direction:Dot(trace.HitNormal) * trace.HitNormal):GetNormalized()
-                    local randomOffset = Vector(math.random(-1, 1) * 0.1, math.random(-1, 1) * 0.1, math.random(-1, 1) * 0.1)
-                    ricochetDirection = (ricochetDirection + randomOffset):GetNormalized()
-                    local ricochetData = {
-                        start = trace.HitPos,
-                        endpos = trace.HitPos + ricochetDirection:GetNormalized() * distance / 2,
-                    }
 
+        --ricochet
+        if trace.Hit and allowRicochet and not (IsValid(trace.Entity) and (trace.Entity:IsPlayer() or trace.Entity:IsNPC() or trace.Entity:IsNextBot())) then
+            local travelLen = (trace.HitPos - traceStart):Length()
+            if travelLen >= 20 then
+                local impactAngle = direction:Dot(trace.HitNormal) * -1
+                if math.deg(math.acos(impactAngle)) > ricochetAng and math.random() <= ricochetProb then
+                    local normal = trace.HitNormal
+                    local ricochetDir = (direction - 2 * direction:Dot(normal) * normal):GetNormalized()
+                    local offset = Vector(math.Rand(-0.1, 0.1), math.Rand(-0.1, 0.1), math.Rand(-0.1, 0.1))
+                    ricochetDir = (ricochetDir + offset):GetNormalized()
+
+                    local ricochetStart = trace.HitPos
+                    local ricochetEnd = ricochetStart + ricochetDir * (distance / 2)
+                    local ricochetTrace = util.TraceLine({ start = ricochetStart, endpos = ricochetEnd })
+
+                    --sound
                     if math.random() > 0.8 then
                         local ricochetSound = "rico" .. math.random(1, 3) .. ".wav"
                         sound.Play(ricochetSound, trace.HitPos, 75, 100, 1)
                     end
-                
-                    local ricochetTrace = util.TraceLine(ricochetData)
-                    if ricochetTrace.Hit and (ricochetTrace.Entity:IsPlayer() or ricochetTrace.Entity:IsNPC() or ricochetTrace.Entity:IsNextBot()) then
-                        local target = trace.Entity
-                        local appliedDamage = damage:GetInt()
-                        if not damageTracker[target] then
-                            damageTracker[target] = 0
-                        end
-                        local remainingDamage = maxTotalDamage - damageTracker[target]
-                        if remainingDamage > 0 then
-                            appliedDamage = math.min(appliedDamage, remainingDamage)
-                            target:TakeDamage(appliedDamage)
-                            damageTracker[target] = damageTracker[target] + appliedDamage
+
+                    --apply ricochet damage
+                    if ricochetTrace.Hit and IsValid(ricochetTrace.Entity) and
+                        (ricochetTrace.Entity:IsPlayer() or ricochetTrace.Entity:IsNPC() or ricochetTrace.Entity:IsNextBot()) then
+                        local target = ricochetTrace.Entity
+                        damageTracker[target] = damageTracker[target] or 0
+                        local remaining = maxDamage - damageTracker[target]
+                        if remaining > 0 then
+                            local dmg = math.min(applyDamage, remaining)
+                            target:TakeDamage(dmg)
+                            damageTracker[target] = damageTracker[target] + dmg
                         end
                     end
-                    if isDebug:GetBool() then
+
+                    if debug then
                         ricochetCount = ricochetCount + 1
-                        debugoverlay.Line(ricochetData.start, ricochetTrace.HitPos, 20, Color(255, 255, 0), false)
-                        if IsValid(trace.Entity) and (trace.Entity:IsPlayer() or trace.Entity:IsNPC() or trace.Entity:GetClass():find("prop_")) then
-                            debugoverlay.Cross(trace.HitPos, 5, 20, Color(0, 255, 0), false)
-                            debugoverlay.Text(trace.HitPos, trace.Entity:GetClass(), 20)
+                        debugoverlay.Line(ricochetStart, ricochetTrace.HitPos, 20, Color(255, 255, 0), false)
+                        if IsValid(ricochetTrace.Entity) and (ricochetTrace.Entity:IsPlayer() or ricochetTrace.Entity:IsNPC() or ricochetTrace.Entity:GetClass():find("prop_")) then
+                            debugoverlay.Cross(ricochetTrace.HitPos, 5, 20, Color(0, 255, 0), false)
+                            debugoverlay.Text(ricochetTrace.HitPos, ricochetTrace.Entity:GetClass(), 20)
                         end
                     end
                 end
             end
         end
     end
-    if isDebug:GetBool() then
+    if debug then
         print("[RFS DEBUG] Total traces: " .. num)
         print("[RFS DEBUG] Traces hit: " .. hitCount .. " Traces missed: " .. missCount .. " Ricochet traces: " .. ricochetCount)
     end
@@ -188,67 +191,48 @@ local function fireFragment(attacker, src, dir, distance, damage, tracer, spread
     attacker:FireBullets(fragment)
 end
 
+local bulletAttackerEntity
 local function shootBullets(num, pos)
-    local bulletAttacker
-    if not IsValid(bulletAttacker) then
-        bulletAttacker = ents.Create("info_target")
-        bulletAttacker:SetPos(Vector(0, 0, 0))
-        bulletAttacker:Spawn()
-        bulletAttacker:SetNoDraw(true)
-        bulletAttacker:SetNotSolid(true)
+    if not IsValid(bulletAttackerEntity) then
+        bulletAttackerEntity = ents.Create("info_target")
+        bulletAttackerEntity:SetPos(Vector(0, 0, 0))
+        bulletAttackerEntity:Spawn()
+        bulletAttackerEntity:SetNoDraw(true)
+        bulletAttackerEntity:SetNotSolid(true)
     end
-    local attacker = bulletAttacker
+
+    local attacker = bulletAttackerEntity
     attacker:SetPos(pos)
+    attacker.IsFragmentAttacker = true
+    attacker.MaxFragmentDamage = TotalDamage:GetInt()
+    attacker.DamageTracker = {}
+
+    local inWater = isInWater(pos)
     local source = pos + Vector(0, 0, 5)
-    local downTraceData = {
+
+    local traceResult = util.TraceLine({
         start = pos,
         endpos = pos + Vector(0, 0, -10000)
-    }
-    local traceResult = util.TraceLine(downTraceData)
+    })
     local isCloseToGround = traceResult.Hit and pos:Distance(traceResult.HitPos) < 10
-    local maxTotalDamage = TotalDamage:GetInt()
+
+    local travelDist = travelDistance:GetInt()
+    local fragDamage = damage:GetInt()
+    local fragTracer = tracer:GetInt()
+    local fragSpread = Vector(0.01, 0.01, 0)
+
     if fragmentsType:GetInt() == 2 then
-        maxTotalDamage = maxTotalDamage / 2
+        attacker.MaxFragmentDamage = attacker.MaxFragmentDamage / 2
     end
-    attacker.IsFragmentAttacker = true
-    attacker.MaxFragmentDamage = maxTotalDamage
-    attacker.DamageTracker = {}
-    local inWater = isInWater(pos)
 
     for i = 1, num do
-        local fragment = {}
         local direction = setDirection(isCloseToGround)
-        local distance = math.random(travelDistance:GetInt() / 2, travelDistance:GetInt()) / 0.02
+        local distance = math.random(travelDist / 2, travelDist) / 0.02
         if inWater then
             distance = distance * 0.2
         end
-        fireFragment(attacker, source, direction, distance, damage:GetInt(), tracer:GetInt(), Vector(0.01, 0.01, 0), 2)
-        if IsValid(name) then
-            if ricochetEnabled:GetBool() then
-                local traceData = {
-                    start = fragment.Src,
-                    endpos = fragment.Src + fragment.Dir * fragment.Distance
-                }
-                local trace = util.TraceLine(traceData)
-                if trace.Hit and not (IsValid(trace.Entity) and (trace.Entity:IsPlayer() or trace.Entity:IsNPC() or trace.Entity:IsNextBot())) then
-                    if (trace.HitPos - trace.StartPos):Length() >= 20 then
-                        local impactAngle = fragment.Dir:Dot(trace.HitNormal) * -1
-                        if math.deg(math.acos(impactAngle)) > ricochetAngle:GetInt() and math.random() <= (ricochetChance:GetInt() * 0.01) then
-                            local ricochetDirection = (fragment.Dir - 2 * fragment.Dir:Dot(trace.HitNormal) * trace.HitNormal):GetNormalized()
-                            local randomOffset = Vector(math.random(-1, 1) * 0.1, math.random(-1, 1) * 0.1, math.random(-1, 1) * 0.1)
-                            ricochetDirection = (ricochetDirection + randomOffset):GetNormalized()
 
-                            fireFragment(attacker, trace.HitPos, ricochetDirection, fragment.Distance / 2, fragment.Damage / 2, fragment.Tracer, fragment.Spread, fragment.Force / 2)
-
-                            if math.random() > 0.8 then
-                                local ricochetSound = "rico" .. math.random(1, 3) .. ".wav"
-                                sound.Play(ricochetSound, trace.HitPos, 75, 100, 1)
-                            end
-                        end
-                    end
-                end
-            end
-        end
+        fireFragment(attacker, source, direction, distance, fragDamage, fragTracer, fragSpread, 2)
     end
 
     if isDebug:GetBool() then
