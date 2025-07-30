@@ -5,6 +5,8 @@ util.AddNetworkString("RFSUpdateWhitelist")
 local filePath = "rfsWhitelist.txt"
 local rfsWhitelist = {}
 
+RFS = RFS or {}
+
 local playerMessageTimestamps = {}
 local recentExplosions = {}
 
@@ -197,8 +199,6 @@ local function shootBullets(num, pos)
     end
     local attacker = bulletAttacker
     attacker:SetPos(pos)
-    local effectData = EffectData()
-    effectData:SetOrigin(pos)
     local source = pos + Vector(0, 0, 5)
     local downTraceData = {
         start = pos,
@@ -207,12 +207,12 @@ local function shootBullets(num, pos)
     local traceResult = util.TraceLine(downTraceData)
     local isCloseToGround = traceResult.Hit and pos:Distance(traceResult.HitPos) < 10
     local maxTotalDamage = TotalDamage:GetInt()
-    attacker.IsFragmentAttacker = true
-    attacker.MaxFragmentDamage = maxTotalDamage
-    attacker.DamageTracker = {}
     if fragmentsType:GetInt() == 2 then
         maxTotalDamage = maxTotalDamage / 2
     end
+    attacker.IsFragmentAttacker = true
+    attacker.MaxFragmentDamage = maxTotalDamage
+    attacker.DamageTracker = {}
     local inWater = isInWater(pos)
 
     for i = 1, num do
@@ -294,6 +294,14 @@ local function shootMixed(num, pos)
 
     if numTraces > 0 then
         shootTraces(numTraces, pos)
+    end
+end
+
+function RFS:CreateShrapnell(num, pos, isBullets)
+    if not isBullets then
+        shootTraces(num, pos)
+    else
+        shootBullets(num, pos)
     end
 end
 
