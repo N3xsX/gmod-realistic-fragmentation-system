@@ -23,13 +23,16 @@ hook.Add("PopulateToolMenu", "RFSOptions", function()
             selectFragments:AddChoice("Bullets", 1)
             selectFragments:AddChoice("Bullets w/ traces", 2)
             local currentValue = GetConVar("sv_rfs_fragments_type"):GetInt()
-            panel:Help("Traces: The least resource-intensive option. Fragments don’t physically interact with the world (e.g., they won’t push props or leave bullet holes). In short, no visual effects but gets the job done")
-            panel:Help("Bullets: The most resource-heavy method. Fragments behave like normal bullets, interacting with the world in all possible ways")
-            panel:Help("Bullets w/ traces: A middle ground. Combines traces and bullets based on the set ratio. This option allows some of the physical interaction effects, while maintaining a better performance balance than pure bullets")
+                panel:Help(
+                "Traces Only - The fastest option, up to 3x faster than using full bullets. Fragments are purely visual and dont interact with the environment (no prop pushing, no bullet holes)")
+                panel:Help(
+                "Bullets Only - The slowest and most performance-intensive mode. Fragments act like real bullets, fully interacting with the world")
+                panel:Help(
+                "Bullets w/Traces - A balanced option, roughly 1.5x to 2x faster than full bullets depending on set ratio. Combines traces and bullets to maintain some physical interaction while improving performance")
             panel:CheckBox("Enable Side-Biased fragments", "sv_rfs_fragment_direction")
             panel:ControlHelp("If enabled, fragments will spread more horizontally, reducing vertical spread")
-            panel:CheckBox("Enable bullets batching ", "sv_rfs_batch_fragments")
-            panel:ControlHelp("If enabled, bullets will spawn in smaller batches instead of all at once. May reduce lag spikes during explosion")
+            /*panel:CheckBox("Enable bullets batching ", "sv_rfs_batch_fragments")
+            panel:ControlHelp("If enabled, bullets will spawn in smaller batches instead of all at once. May reduce lag spikes during explosion")*/
             panel:CheckBox("Enable bullets traces ", "sv_rfs_enable_bullet_traces")
             panel:ControlHelp("If enabled, some bullets will leave a trace, allowing you to see fragments fly by")
             if currentValue == 0 then
