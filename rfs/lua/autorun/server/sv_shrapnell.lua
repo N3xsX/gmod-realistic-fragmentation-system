@@ -71,7 +71,15 @@ local function setDirection(isCloseToGround)
 end
 
 local function shootTraces(num, pos)
-    local downTrace = util.TraceLine({
+    local traceLine = util.TraceLine
+    local rand = math.random
+    local randf = math.Rand
+    local cos = math.cos
+    local rad = math.rad
+    local IsValid = IsValid
+    local soundPlay = sound.Play
+
+    local downTrace = traceLine({
         start = pos,
         endpos = pos + Vector(0, 0, -10000)
     })
@@ -86,92 +94,81 @@ local function shootTraces(num, pos)
     local applyDamage = damage:GetInt()
     local travelDist = travelDistance:GetInt()
     local allowRicochet = ricochetEnabled:GetBool()
-    local ricochetAng = ricochetAngle:GetInt()
     local ricochetProb = ricochetChance:GetInt() * 0.01
+    local cosThreshold = cos(rad(ricochetAngle:GetInt()))
     local debug = isDebug:GetBool()
 
     local hitCount, missCount, ricochetCount = 0, 0, 0
     local damageTracker = {}
 
+    local function isLiving(ent)
+        return IsValid(ent) and (ent:IsPlayer() or ent:IsNPC() or ent:IsNextBot())
+    end
+
     for i = 1, num do
         local direction = setDirection(isCloseToGround)
-        local distance = math.random(travelDist / 2, travelDist) / 0.02
+        local distance = rand(travelDist / 2, travelDist) / 0.02
         if inWater then distance = distance * 0.2 end
 
-        local traceStart = pos
-        local traceEnd = pos + direction * distance
-        local trace = util.TraceLine({ start = traceStart, endpos = traceEnd })
+        local trace = traceLine({ start = pos, endpos = pos + direction * distance })
 
         if debug then
             if trace.Hit then hitCount = hitCount + 1 else missCount = missCount + 1 end
-            debugoverlay.Line(traceStart, trace.HitPos, 20, Color(255, 0, 0), false)
-            if IsValid(trace.Entity) and (trace.Entity:IsPlayer() or trace.Entity:IsNPC() or trace.Entity:GetClass():find("prop_")) then
-                debugoverlay.Cross(trace.HitPos, 5, 20, Color(0, 255, 0), false)
-                debugoverlay.Text(trace.HitPos, trace.Entity:GetClass(), 20)
-            end
+            debugoverlay.Line(pos, trace.HitPos, 20, Color(255, 0, 0), false)
         end
 
-        --apply damage if valid target
-        if trace.Hit and IsValid(trace.Entity) and (trace.Entity:IsPlayer() or trace.Entity:IsNPC() or trace.Entity:IsNextBot()) then
+        if trace.Hit and isLiving(trace.Entity) then
             local target = trace.Entity
-            damageTracker[target] = damageTracker[target] or 0
-            local remaining = maxDamage - damageTracker[target]
+            local remaining = maxDamage - (damageTracker[target] or 0)
             if remaining > 0 then
                 local dmg = math.min(applyDamage, remaining)
                 target:TakeDamage(dmg)
-                damageTracker[target] = damageTracker[target] + dmg
+                damageTracker[target] = (damageTracker[target] or 0) + dmg
             end
         end
 
-        --ricochet
-        if trace.Hit and allowRicochet and not (IsValid(trace.Entity) and (trace.Entity:IsPlayer() or trace.Entity:IsNPC() or trace.Entity:IsNextBot())) then
-            local travelLen = (trace.HitPos - traceStart):Length()
+        if trace.Hit and allowRicochet and not isLiving(trace.Entity) then
+            local travelLen = (trace.HitPos - pos):Length()
             if travelLen >= 20 then
-                local impactAngle = direction:Dot(trace.HitNormal) * -1
-                if math.deg(math.acos(impactAngle)) > ricochetAng and math.random() <= ricochetProb then
+                local impactAngle = -direction:Dot(trace.HitNormal)
+                if impactAngle < cosThreshold and rand() <= ricochetProb then
                     local normal = trace.HitNormal
                     local ricochetDir = (direction - 2 * direction:Dot(normal) * normal):GetNormalized()
-                    local offset = Vector(math.Rand(-0.1, 0.1), math.Rand(-0.1, 0.1), math.Rand(-0.1, 0.1))
-                    ricochetDir = (ricochetDir + offset):GetNormalized()
+                    ricochetDir = (ricochetDir + Vector(randf(-0.1, 0.1), randf(-0.1, 0.1), randf(-0.1, 0.1)))
+                    :GetNormalized()
 
-                    local ricochetStart = trace.HitPos
-                    local ricochetEnd = ricochetStart + ricochetDir * (distance / 2)
-                    local ricochetTrace = util.TraceLine({ start = ricochetStart, endpos = ricochetEnd })
+                    local ricochetTrace = traceLine({
+                        start = trace.HitPos,
+                        endpos = trace.HitPos + ricochetDir * (distance / 2)
+                    })
 
-                    --sound
-                    if math.random() > 0.8 then
-                        local ricochetSound = "rico" .. math.random(1, 3) .. ".wav"
-                        sound.Play(ricochetSound, trace.HitPos, 75, 100, 1)
+                    if rand() > 0.8 then
+                        soundPlay("rico" .. rand(1, 3) .. ".wav", trace.HitPos, 75, 100, 1)
                     end
 
-                    --apply ricochet damage
-                    if ricochetTrace.Hit and IsValid(ricochetTrace.Entity) and
-                        (ricochetTrace.Entity:IsPlayer() or ricochetTrace.Entity:IsNPC() or ricochetTrace.Entity:IsNextBot()) then
+                    if isLiving(ricochetTrace.Entity) then
                         local target = ricochetTrace.Entity
-                        damageTracker[target] = damageTracker[target] or 0
-                        local remaining = maxDamage - damageTracker[target]
+                        local remaining = maxDamage - (damageTracker[target] or 0)
                         if remaining > 0 then
                             local dmg = math.min(applyDamage, remaining)
                             target:TakeDamage(dmg)
-                            damageTracker[target] = damageTracker[target] + dmg
+                            damageTracker[target] = (damageTracker[target] or 0) + dmg
                         end
                     end
 
                     if debug then
                         ricochetCount = ricochetCount + 1
-                        debugoverlay.Line(ricochetStart, ricochetTrace.HitPos, 20, Color(255, 255, 0), false)
-                        if IsValid(ricochetTrace.Entity) and (ricochetTrace.Entity:IsPlayer() or ricochetTrace.Entity:IsNPC() or ricochetTrace.Entity:GetClass():find("prop_")) then
-                            debugoverlay.Cross(ricochetTrace.HitPos, 5, 20, Color(0, 255, 0), false)
-                            debugoverlay.Text(ricochetTrace.HitPos, ricochetTrace.Entity:GetClass(), 20)
-                        end
+                        debugoverlay.Line(trace.HitPos, ricochetTrace.HitPos, 20, Color(255, 255, 0), false)
                     end
                 end
             end
         end
     end
+
     if debug then
         print("[RFS DEBUG] Total traces: " .. num)
-        print("[RFS DEBUG] Traces hit: " .. hitCount .. " Traces missed: " .. missCount .. " Ricochet traces: " .. ricochetCount)
+        print("[RFS DEBUG] Traces hit: " ..
+        hitCount .. " Traces missed: " .. missCount .. " Ricochet traces: " .. ricochetCount)
     end
 end
 
@@ -192,6 +189,7 @@ local function fireFragment(attacker, src, dir, distance, damage, tracer, spread
 end
 
 local bulletAttackerEntity
+local fragSpreadConst = Vector(0.01, 0.01, 0)
 local function shootBullets(num, pos)
     if not IsValid(bulletAttackerEntity) then
         bulletAttackerEntity = ents.Create("info_target")
@@ -217,22 +215,24 @@ local function shootBullets(num, pos)
     local isCloseToGround = traceResult.Hit and pos:Distance(traceResult.HitPos) < 10
 
     local travelDist = travelDistance:GetInt()
+    local minDist, maxDist = travelDist * 0.5, travelDist
     local fragDamage = damage:GetInt()
     local fragTracer = tracer:GetInt()
-    local fragSpread = Vector(0.01, 0.01, 0)
 
     if fragmentsType:GetInt() == 2 then
         attacker.MaxFragmentDamage = attacker.MaxFragmentDamage / 2
     end
 
+    local rand = math.random
+
     for i = 1, num do
         local direction = setDirection(isCloseToGround)
-        local distance = math.random(travelDist / 2, travelDist) / 0.02
+        local distance = rand(minDist, maxDist) / 0.02
         if inWater then
             distance = distance * 0.2
         end
 
-        fireFragment(attacker, source, direction, distance, fragDamage, fragTracer, fragSpread, 2)
+        fireFragment(attacker, source, direction, distance, fragDamage, fragTracer, fragSpreadConst, 2)
     end
 
     if isDebug:GetBool() then
@@ -312,6 +312,19 @@ local function checkDistance(pos)
     return false
 end
 
+local recentExplosionTimes = {}
+
+local function getExplosionLoad()
+    local currentTime = CurTime()
+    local cutoff = currentTime - 1
+    for i = #recentExplosionTimes, 1, -1 do
+        if recentExplosionTimes[i] < cutoff then
+            table.remove(recentExplosionTimes, i)
+        end
+    end
+    return #recentExplosionTimes
+end
+
 local function rfsMultiplayer(explosionPosition, explosionName)
     --local explosionCondition = {"explode", "explosion", "explosions", "detonate", "weapons/explode", "weapons/debris1", "weapons/debris2", "weapons/debris3", "gredwitch/turret", "turret/turret_turn"}
     local explosionConditions = {
@@ -332,37 +345,69 @@ local function rfsMultiplayer(explosionPosition, explosionName)
     if explosionPosition then
         if not checkDistance(explosionPosition) then return end
         local startTime = SysTime()
-        if fragmentsType:GetInt() == 0 then
-            shootTraces(fragments:GetInt(), explosionPosition)
-        elseif fragmentsType:GetInt() == 1 then
-            shootBullets(fragments:GetInt(), explosionPosition)
-        elseif fragmentsType:GetInt() == 2 then
-            shootMixed(fragments:GetInt(), explosionPosition)
+
+        table.insert(recentExplosionTimes, CurTime())
+
+        local load = getExplosionLoad()
+
+        local baseFragments = fragments:GetInt()
+        local scaledFragments = baseFragments
+
+        if load > 3 then
+            scaledFragments = math.floor(baseFragments * 0.25)
+        elseif load > 2 then
+            scaledFragments = math.floor(baseFragments * 0.5)
+        elseif load > 1 then
+            scaledFragments = math.floor(baseFragments * 0.75)
         end
+
+        if fragmentsType:GetInt() == 0 then
+            shootTraces(scaledFragments, explosionPosition)
+        elseif fragmentsType:GetInt() == 1 then
+            shootBullets(scaledFragments, explosionPosition)
+        elseif fragmentsType:GetInt() == 2 then
+            shootMixed(scaledFragments, explosionPosition)
+        end
+
         if isDebug:GetBool() then
-            local endTime = SysTime()
-            local elapsed = endTime - startTime
-            print("[RFS DEBUG] Explosion took: " .. math.Truncate(elapsed, 5) .. " seconds")
+            local elapsed = SysTime() - startTime
+            print("[RFS DEBUG] Explosion took: " .. elapsed .. " seconds (load=" .. load .. ", frags=" .. scaledFragments .. ")")
         end
     end
 end
 
 local function rfsSingleplayer(explosionPosition)
-    if explosionPosition then
-        if not checkDistance(explosionPosition) then return end
-        local startTime = SysTime()
-        if fragmentsType:GetInt() == 0 then
-            shootTraces(fragments:GetInt(), explosionPosition)
-        elseif fragmentsType:GetInt() == 1 then
-            shootBullets(fragments:GetInt(), explosionPosition)
-        elseif fragmentsType:GetInt() == 2 then
-            shootMixed(fragments:GetInt(), explosionPosition)
-        end
-        if isDebug:GetBool() then
-            local endTime = SysTime()
-            local elapsed = endTime - startTime
-            print("[RFS DEBUG] Explosion took: " .. math.Truncate(elapsed, 5) .. " seconds")
-        end
+    if not explosionPosition then return end
+    if not checkDistance(explosionPosition) then return end
+
+    local startTime = SysTime()
+
+    table.insert(recentExplosionTimes, CurTime())
+
+    local load = getExplosionLoad()
+
+    local baseFragments = fragments:GetInt()
+    local scaledFragments = baseFragments
+
+    if load > 3 then
+        scaledFragments = math.floor(baseFragments * 0.25)
+    elseif load > 2 then
+        scaledFragments = math.floor(baseFragments * 0.5)
+    elseif load > 1 then
+        scaledFragments = math.floor(baseFragments * 0.75)
+    end
+
+    if fragmentsType:GetInt() == 0 then
+        shootTraces(scaledFragments, explosionPosition)
+    elseif fragmentsType:GetInt() == 1 then
+        shootBullets(scaledFragments, explosionPosition)
+    elseif fragmentsType:GetInt() == 2 then
+        shootMixed(scaledFragments, explosionPosition)
+    end
+
+    if isDebug:GetBool() then
+        local elapsed = SysTime() - startTime
+        print("[RFS DEBUG] Explosion took: " .. elapsed .. " seconds (load=" .. load .. ", frags=" .. scaledFragments .. ")")
     end
 end
 
@@ -374,27 +419,34 @@ local function isExplosionDuplicate(explosionPosition)
         end
     end
     for _, data in ipairs(recentExplosions) do
-        if data.position == explosionPosition then
+        if data.position:DistToSqr(explosionPosition) < 1000 then
             print("[RFS] Explosion at " .. tostring(explosionPosition) .. " is duplicate, ignoring...")
-            return true -- duplicate explosion, ignore it
+            return true
         end
     end
-    table.insert(recentExplosions, { position = explosionPosition, timestamp = currentTime })
+    recentExplosions[#recentExplosions + 1] = { position = explosionPosition, timestamp = currentTime }
     return false
 end
 
 -- anti spam / anti lag
 local function checkMessageRate(sender)
     local currentTime = CurTime()
-    playerMessageTimestamps[sender] = playerMessageTimestamps[sender] or {}
-    table.insert(playerMessageTimestamps[sender], currentTime)
-    for i = #playerMessageTimestamps[sender], 1, -1 do
-        if currentTime - playerMessageTimestamps[sender][i] > 1 then
-            table.remove(playerMessageTimestamps[sender], i)
+    local stamps = playerMessageTimestamps[sender]
+    if not stamps then
+        stamps = {}
+        playerMessageTimestamps[sender] = stamps
+    end
+    stamps[#stamps + 1] = currentTime
+
+    local cutoff = currentTime - 1
+    for i = #stamps, 1, -1 do
+        if stamps[i] < cutoff then
+            table.remove(stamps, i)
         end
     end
-    if #playerMessageTimestamps[sender] > 5 then
-        print("[RFS] Player: " .. sender:Nick() .. " (" .. sender:SteamID() .. ") sent too many messages per second! Count: " .. #playerMessageTimestamps[sender])
+
+    if #stamps > 5 then
+        print("[RFS] Player: " .. sender:Nick() .. " (" .. sender:SteamID() .. ") sent too many messages per second! Count: " .. #stamps)
         return false
     end
     return true
