@@ -70,13 +70,17 @@ local function setDirection(isCloseToGround)
     return direction
 end
 
+local IsValid = IsValid
+local function isLiving(ent)
+    return IsValid(ent) and (ent:IsPlayer() or ent:IsNPC() or ent:IsNextBot())
+end
+
 local function shootTraces(num, pos)
     local traceLine = util.TraceLine
     local rand = math.random
     local randf = math.Rand
     local cos = math.cos
     local rad = math.rad
-    local IsValid = IsValid
     local soundPlay = sound.Play
 
     local downTrace = traceLine({
@@ -101,10 +105,6 @@ local function shootTraces(num, pos)
     local hitCount, missCount, ricochetCount = 0, 0, 0
     local damageTracker = {}
 
-    local function isLiving(ent)
-        return IsValid(ent) and (ent:IsPlayer() or ent:IsNPC() or ent:IsNextBot())
-    end
-
     for i = 1, num do
         local direction = setDirection(isCloseToGround)
         local distance = rand(travelDist / 2, travelDist) / 0.02
@@ -128,21 +128,20 @@ local function shootTraces(num, pos)
         end
 
         if trace.Hit and allowRicochet and not isLiving(trace.Entity) then
-            local travelLen = (trace.HitPos - pos):Length()
+            local travelLen = trace.Fraction * distance
             if travelLen >= 20 then
                 local impactAngle = -direction:Dot(trace.HitNormal)
                 if impactAngle < cosThreshold and rand() <= ricochetProb then
                     local normal = trace.HitNormal
-                    local ricochetDir = (direction - 2 * direction:Dot(normal) * normal):GetNormalized()
-                    ricochetDir = (ricochetDir + Vector(randf(-0.1, 0.1), randf(-0.1, 0.1), randf(-0.1, 0.1)))
-                    :GetNormalized()
+                    local ricochetDir = direction - 2 * direction:Dot(normal) * normal
+                    ricochetDir = (ricochetDir + Vector(randf(-0.1, 0.1), randf(-0.1, 0.1), randf(-0.1, 0.1))):GetNormalized()
 
                     local ricochetTrace = traceLine({
                         start = trace.HitPos,
-                        endpos = trace.HitPos + ricochetDir * (distance / 2)
+                        endpos = trace.HitPos + ricochetDir * (distance / 3)
                     })
 
-                    if rand() > 0.8 then
+                    if rand() > 0.95 then
                         soundPlay("rico" .. rand(1, 3) .. ".wav", trace.HitPos, 75, 100, 1)
                     end
 
@@ -240,7 +239,7 @@ local function shootBullets(num, pos)
     end
 end
 
-hook.Add("EntityTakeDamage", "LimitBulletDamage_Global", function(target, dmgInfo)
+hook.Add("EntityTakeDamage", "RFSLimitBulletDamage", function(target, dmgInfo)
     local attacker = dmgInfo:GetAttacker()
     if not IsValid(attacker) then return end
     if not attacker.IsFragmentAttacker then return end
