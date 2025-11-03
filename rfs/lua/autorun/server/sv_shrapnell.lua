@@ -281,7 +281,11 @@ local function shootMixed(num, pos)
     end
 end
 
-function RFS:CreateShrapnell(num, pos, isBullets)
+function RFS:CreateShrapnell(num, pos, isBullets, isMixed)
+    if isMixed then
+        shootMixed(num, pos)
+        return
+    end
     if not isBullets then
         shootTraces(num, pos)
     else
