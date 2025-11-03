@@ -6,4 +6,4 @@ You can create fragments using the following function:
 When ``isBullets`` if set to true, the explosion will use bullets; otherwise, it will use traces  
 When ``isMixed`` if set to true, it will use both methods based on the server cVar configuration  
 
->Note: Bullet damage, distance, and other parameters are automatically taken from the server’s cVar settings
+>Note: Bullet damage, ratio, distance, and other parameters are automatically taken from the server’s cVar settings
